@@ -14,6 +14,7 @@ class Task(BaseModel):
     Task entity belonging to a board with title, description, and status (R2).
     Enforces real database foreign key, cascade delete, and check constraints (R3, R4).
     """
+    # Migration 0002 enforces database cascade; on_delete also covers ORM deletion.
     board = models.ForeignKey(
         Board,
         on_delete=models.CASCADE,

@@ -54,7 +54,7 @@ class TaskModelTest(TestCase):
     def test_cascade_delete_board_removes_tasks(self):
         """
         Deleting through Django removes associated tasks via the ORM collector.
-        This does not verify database-level ON DELETE CASCADE (R4 is still pending).
+        Direct SQL deletion is covered separately in test_database_cascade.py.
         """
         task1 = Task.objects.create(board=self.board, title="Task 1")
         task2 = Task.objects.create(board=self.board, title="Task 2")
@@ -84,9 +84,9 @@ class TaskModelTest(TestCase):
         R3 requirement: Foreign key constraint enforced by the database itself.
         A task must not be able to reference a board that does not exist.
         """
-        Task.objects.create(board_id=999999, title="Task with non-existent board")
-        try:
-            with self.assertRaises(IntegrityError):
+        with self.assertRaises(IntegrityError):
+            # Roll back the failed constraint check before issuing another query.
+            with transaction.atomic():
+                Task.objects.create(board_id=999999, title="Task with non-existent board")
                 connection.check_constraints()
-        finally:
-            Task.objects.filter(board_id=999999).delete()
+        self.assertFalse(Task.objects.filter(board_id=999999).exists())

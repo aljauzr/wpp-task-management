@@ -8,7 +8,7 @@ Commit 3 adds `BoardService` and `TaskService`, repository-backed persistence, d
 
 Only `/health` is currently exposed over HTTP. Board/task REST endpoints and uniform error handling are next (commit 4), followed by the task-management UI (commit 5) and final documentation/self-checks (commit 6).
 
-**Known carry-over from commit 2:** Board deletion currently cascades through Django's ORM, not a database `ON DELETE CASCADE`. R4 needs a follow-up migration and direct-SQL verification before submission. See [schema details](backend/SCHEMA.md).
+**R4 follow-up completed:** Migration `0002` enforces cascade deletion through PostgreSQL's `ON DELETE CASCADE` FK or an equivalent SQLite database trigger. Direct-SQL and migration regression tests verify deletion, rollback, and preservation of existing data. Run `python manage.py migrate` to update existing databases. See [schema details](backend/SCHEMA.md).
 
 ---
 

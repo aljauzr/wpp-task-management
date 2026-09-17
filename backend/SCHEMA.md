@@ -2,7 +2,7 @@
 
 This document describes the database design, tables, relationships, constraints, indexes, and architectural decisions for the Mini Task Management application.
 
-**Known R4 gap:** Cascade deletion is the chosen policy, but migration `0001` implements it only through Django's ORM. It does not create a database-level `ON DELETE CASCADE`. A follow-up migration and a direct-SQL test are still required; the current service tests verify ORM deletion only.
+**R4 deletion policy:** Deleting a board removes its tasks at the database level, including when issued as direct SQL. Migration `0002_database_board_cascade` installs a native `ON DELETE CASCADE` foreign key on PostgreSQL and an equivalent database trigger on SQLite.
 
 ---
 
@@ -23,7 +23,7 @@ erDiagram
     }
     TASKS {
         bigint id PK
-        bigint board_id FK "REFERENCES boards(id)"
+        bigint board_id FK "REFERENCES boards(id), database cascade"
         varchar title "NOT NULL, non-empty"
         text description "NOT NULL, empty allowed"
         varchar status "NOT NULL ('TODO', 'IN_PROGRESS', 'DONE')"
@@ -60,7 +60,7 @@ Represents an individual task within a specific board.
 | Column | Data Type | Nullable | Default | Constraints & Keys | Description |
 |---|---|---|---|---|---|
 | `id` | `BIGINT` | No | Auto-increment | `PRIMARY KEY` | Unique 64-bit task identifier. |
-| `board_id` | `BIGINT` | No | — | `FOREIGN KEY` → `boards(id)` | Board reference (Django ORM cascade; database `NO ACTION`). |
+| `board_id` | `BIGINT` | No | — | `FOREIGN KEY` → `boards(id)` | Database cascade: PostgreSQL FK / SQLite trigger. |
 | `title` | `VARCHAR(255)` | No | — | `CHECK (title != '')` | Title of the task (required, non-empty). |
 | `description` | `TEXT` | No | `''` | — | Optional detailed description. |
 | `status` | `VARCHAR(20)` | No | `'TODO'` | `CHECK (status IN (...))` | Current lifecycle status (`TODO`, `IN_PROGRESS`, `DONE`). |
@@ -70,10 +70,11 @@ Represents an individual task within a specific board.
 Defaults for descriptions, statuses, and timestamps in these tables are applied by Django, not SQL `DEFAULT` clauses. Direct SQL inserts must supply those values. SQLite stores the auto-increment primary keys as `INTEGER`; PostgreSQL uses `BIGINT`. The application enforces the 255-character name/title limits and rejects whitespace-only values; the existing database checks only reject empty strings.
 
 #### Foreign Key & Deletion Policy (R3, R4):
-- **Current Constraint**: `FOREIGN KEY (board_id) REFERENCES boards(id) DEFERRABLE INITIALLY DEFERRED`, with the default `NO ACTION` deletion rule.
-- **Enforcement**: Enforced directly by the database engine. Direct SQL inserts referencing a non-existent `board_id` fail with `IntegrityError`.
-- **Current Deletion Behavior**: `Board.delete()` uses Django's delete collector to remove related tasks before deleting the board. Direct SQL deletion does not cascade and fails at constraint checking/commit while tasks remain. The foreign key prevents orphans, but does not yet enforce the intended cascade policy.
-- **Reasoning for the Intended `ON DELETE CASCADE`**: A board acts as a container. Tasks have no independent lifecycle without their parent board, so deleting a board should remove its tasks. Database-level cascade still needs to be implemented to align direct SQL and ORM behavior.
+- **PostgreSQL Constraint**: `FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED`.
+- **SQLite Constraint**: The original deferred FK remains in place with `NO ACTION`; the `boards_delete_tasks` database trigger implements cascade deletion before the constraint is checked.
+- **SQLite Trigger**: `AFTER DELETE ON boards FOR EACH ROW`, execute `DELETE FROM tasks WHERE board_id = OLD.id`. It runs inside the same transaction as the parent deletion, so rolling back restores both the board and its tasks.
+- **Enforcement**: Both engines reject direct SQL inserts or updates referencing a non-existent `board_id`. Both remove the board's tasks on direct SQL deletion without any service-layer cleanup, while preserving unrelated boards/tasks. Django's `on_delete=models.CASCADE` also remains in place for ORM operations.
+- **Reasoning**: A board acts as a container. Tasks have no independent lifecycle without their parent board, so deleting a board should remove its tasks.
 
 #### Check Constraints:
 1. `task_title_not_empty`: `CHECK (title != '')` — guarantees at the database level that empty titles cannot be saved.
@@ -107,6 +108,19 @@ python manage.py migrate
 
 Migration history is tracked in `src/database/migrations/`:
 - `0001_initial.py`: Creates `boards` and `tasks` tables with check constraints, foreign keys, and indexes.
+- `0002_database_board_cascade.py`: Enforces cascade deletion in the database. PostgreSQL replaces only the FK deletion rule; SQLite adds a trigger without rebuilding either table. Existing rows, timestamps, indexes, and check constraints are preserved.
+
+Existing installations use the same `python manage.py migrate` command; do not delete the database or edit the already-applied initial migration.
+
+Migration `0002` is reversible. Reversing to `0001` removes the SQLite trigger or restores PostgreSQL's `NO ACTION` FK rule. It preserves remaining data but does **not** recover previously deleted boards/tasks. This reverses the R4 fix, so keep `0002` applied during normal use.
+
+Verification (from `backend/`):
+
+```bash
+python -m pytest tests/test_database_cascade.py tests/test_cascade_migration.py -q
+```
+
+These tests cover direct SQL deletion, transaction rollback, orphan insert/update rejection, and migration upgrade/reverse/reapply with pre-existing data. They run against the configured database using a separate test database.
 
 ---
 
@@ -123,3 +137,7 @@ Migration history is tracked in `src/database/migrations/`:
 3. **UUID vs. Auto-Incrementing BigInt Primary Keys**:
    - *Considered*: Using UUIDv4 primary keys for distributed generation and URL obfuscation.
    - *Rejected*: This is an internal single-tenant application. 64-bit integers (`BigAutoField`) yield cleaner REST API routes (`/api/boards/1/tasks`), smaller B-Tree index footprints, and optimal cache locality compared to random 128-bit UUIDs.
+
+4. **Rebuilding SQLite Tables to Change the FK**:
+   - *Rejected*: SQLite cannot alter an existing foreign key in place. A database trigger provides equivalent transactional deletion behavior without copying rows or recreating indexes, while PostgreSQL supports altering the FK directly.
+   - *Maintenance trade-off*: Django's model state does not describe these custom database objects. Future migrations that rebuild `boards`/`tasks` or replace the FK must preserve or recreate the trigger/cascade rule. Run the direct-SQL regression tests after schema changes.
