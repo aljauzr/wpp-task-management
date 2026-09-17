@@ -116,7 +116,7 @@ export function BoardSidebar({
                 onClick={() => onSelectBoard(board.id)}
               >
                 <span className={styles.boardRow}>
-                  <span>
+                  <span className={styles.boardText}>
                     <span className={styles.boardName}>{board.name}</span>
                     <span className={styles.boardMeta}>
                       Created {formatBoardMeta(board)}

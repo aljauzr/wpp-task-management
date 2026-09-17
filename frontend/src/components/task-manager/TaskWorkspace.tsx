@@ -155,29 +155,21 @@ export function TaskWorkspace({
 
   return (
     <section className={styles.stack}>
-      <div
-        className={`${styles.statusBanner} ${
-          hasBackendIssue ? styles.statusBannerOffline : styles.statusBannerOnline
-        }`}
-      >
-        <div>
-          <p className={styles.statusTitle}>
-            {hasBackendIssue ? 'Backend connection issue' : 'Backend connected'}
-          </p>
-          <p className={styles.statusText}>
-            {hasBackendIssue
-              ? boardError || taskError
-              : 'Boards and tasks are loaded over HTTP from the Django API.'}
-          </p>
+      {hasBackendIssue && (
+        <div className={`${styles.statusBanner} ${styles.statusBannerOffline}`}>
+          <div>
+            <p className={styles.statusTitle}>Backend connection issue</p>
+            <p className={styles.statusText}>{boardError || taskError}</p>
+          </div>
+          <button
+            type="button"
+            className="button button-outline"
+            onClick={() => void onRetry()}
+          >
+            Retry
+          </button>
         </div>
-        <button
-          type="button"
-          className="button button-outline"
-          onClick={() => void onRetry()}
-        >
-          Retry
-        </button>
-      </div>
+      )}
 
       <div className={styles.panel}>
         <div className={styles.panelHeader}>

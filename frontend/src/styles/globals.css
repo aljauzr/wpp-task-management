@@ -203,6 +203,10 @@ body {
 
 .task-manager-shell {
   width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 /* Status Card */
