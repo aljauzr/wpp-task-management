@@ -151,7 +151,7 @@ Run these commands from `backend/`, with the virtual environment activated and d
 python -m pytest -q
 ```
 
-This is the canonical command for the **complete** suite, including the pytest-based service tests and the existing Django/unittest tests. `python manage.py test` only discovers the older unittest-style tests, so it is not a substitute for the full suite.
+This is the canonical command for the **complete** suite. The suite is intentionally focused on business rules, failure paths, and database guarantees that would catch a real regression. `python manage.py test` is not a substitute for the full suite.
 
 Run only isolated service unit tests (no database access):
 
@@ -179,41 +179,24 @@ python -m pytest tests/test_api_integration.py -q
 
 No running backend or frontend server is needed. Pytest-django blocks database access in the service unit tests; their repositories are autospecced mocks. Integration tests use a separate, temporary test database, not the application's data. With `DATABASE_URL` empty they use SQLite; when it targets PostgreSQL, the database server must be running and the user needs permission to create a test database.
 
-The backend suite was verified locally on SQLite. PostgreSQL was also verified for the database-cascade regression coverage introduced in commit 4.
+The backend suite was last verified locally on SQLite with `70 passed`. PostgreSQL was also verified for the database-cascade regression coverage introduced in commit 4.
 
-The suite covers:
-- **Service Unit Tests (`tests/test_board_service.py`, `tests/test_task_service.py`)**:
-  - Creating boards/tasks, trimming names/titles, defaults, and maximum-length boundaries.
-  - Missing, empty, whitespace-only, wrong-type, and overlength required fields.
-  - Description validation and invalid statuses during creation, filtering, and updates.
-  - Missing boards/tasks, including update/delete failures, without writes on rejected input.
-  - Board/status filter delegation and valid status changes.
-- **Service/Repository Integration (`tests/test_service_integration.py`)**:
-  - Persisted values, timestamps, and list ordering.
-  - Actual status filtering without leaking tasks from another board.
-  - Empty boards and filters with no matching tasks.
-  - Task deletion and ORM board cascade, preserving unrelated data.
-  - Missing-resource errors using real repositories.
-- **Database Models & Constraints (`tests/test_models.py`)**:
-  - Creation of boards and tasks with defaults.
-  - Rejection of empty board names (`CHECK (name != '')`).
-  - Rejection of empty task titles (`CHECK (title != '')`).
-  - Rejection of invalid task statuses (`CHECK (status IN (...))`).
-  - Cascade deletion through the Django ORM (not proof of database-level cascade).
-  - Enforcement of foreign key relationships at the database level.
-- **Database Cascade & Migration (`tests/test_database_cascade.py`, `tests/test_cascade_migration.py`)**:
-  - Direct SQL deletion of empty/populated boards, preserving unrelated data.
-  - Transaction rollback restoring both board and tasks.
-  - Direct SQL orphan inserts/updates rejected by the FK.
-  - Upgrade, reversal, and reapplication preserving existing rows, timestamps, indexes, and check constraints.
-- **Business Domain & Health API (`tests/test_health.py`)**:
-  - Domain rules in `HealthService` without web server.
-  - HTTP status codes and contract on `GET /health`.
-- **REST API Integration (`tests/test_api_integration.py`)**:
-  - Board listing, creation, retrieval, and deletion.
-  - Task listing, filtering, creation, status updates, and deletion.
-  - Uniform 400/404 error response payloads.
-  - Non-existent board/task handling at the HTTP layer.
+Current breakdown:
+- `tests/test_task_service.py`: 21 focused unit tests for task validation, filtering, missing-resource handling, and invalid-status failures.
+- `tests/test_api_integration.py`: 20 focused API tests covering the documented board/task endpoints and their required 400/404 paths.
+- `tests/test_board_service.py`: 10 focused unit tests for board validation and missing-board handling.
+- `tests/test_service_integration.py`: 8 service/repository integration tests for persistence, scoped filtering, invalid status updates, and cascade behavior through real repositories.
+- `tests/test_models.py`: 5 schema-level tests for DB constraints and foreign-key enforcement.
+- `tests/test_database_cascade.py`: 3 direct-SQL regression tests for database-enforced cascade and rollback behavior.
+- `tests/test_health.py`: 2 tests for the health service and `GET /health`.
+- `tests/test_cascade_migration.py`: 1 migration regression test for upgrade, reversal, and reapplication.
+
+The suite focuses on the behaviors called out by the brief:
+- service-layer validation and failure cases
+- required 400/404 API behavior
+- board/task filtering and status updates
+- real foreign-key enforcement and database-level delete behavior
+- migration safety for the schema decision made in R4
 
 ---
 

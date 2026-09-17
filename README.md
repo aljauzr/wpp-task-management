@@ -27,6 +27,5 @@ task-manager/
 ├── frontend/
 │   ├── README.md
 │   └── package.json
-├── SUBMISSION_CHECKLIST.md
 └── README.md
 ```
