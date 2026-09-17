@@ -24,6 +24,7 @@ wpp-task-managemment/
 │   ├── tests/                # Unit & integration tests
 │   ├── requirements.txt      # Python dependencies
 │   ├── .env.example          # Backend environment template
+│   ├── SCHEMA.md             # Detailed database schema & trade-offs (R5, R7)
 │   └── README.md             # Backend setup & architecture guide
 │
 ├── frontend/                 # Independent Next.js React UI service
