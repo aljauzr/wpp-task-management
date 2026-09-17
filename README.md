@@ -15,7 +15,6 @@ The root README is intentionally short. Each service keeps its own setup, run in
 - [Backend API Contract](backend/API.md)
 - [Database Schema](backend/SCHEMA.md)
 - [Frontend README](frontend/README.md)
-- [Submission Checklist](SUBMISSION_CHECKLIST.md)
 
 ## Repository Structure
 
