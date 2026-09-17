@@ -50,7 +50,7 @@ Expected failures use plain Python exceptions in `src/services/exceptions.py`:
 - `ValidationError`: `code="VALIDATION_FAILED"`, a useful `message`, and the invalid `field`.
 - `NotFoundError`: `code="NOT_FOUND"`, a `message`, `resource`, and `entity_id`; `field` is `None`.
 
-Neither exception contains an HTTP status or response object. Mapping them to consistent JSON responses belongs to commit 4. Unexpected persistence errors are not disguised as validation failures.
+Neither exception contains an HTTP status or response object. The controller layer maps them to consistent JSON error responses, while unexpected persistence errors still surface as server errors instead of being disguised as validation failures.
 
 ---
 
@@ -171,9 +171,15 @@ Run only database cascade and migration regression tests:
 python -m pytest tests/test_database_cascade.py tests/test_cascade_migration.py -q
 ```
 
+Run only API integration tests:
+
+```bash
+python -m pytest tests/test_api_integration.py -q
+```
+
 No running backend or frontend server is needed. Pytest-django blocks database access in the service unit tests; their repositories are autospecced mocks. Integration tests use a separate, temporary test database, not the application's data. With `DATABASE_URL` empty they use SQLite; when it targets PostgreSQL, the database server must be running and the user needs permission to create a test database.
 
-The complete suite was verified on SQLite 3.45.3 and PostgreSQL 18.6: **116 tests passed on each**.
+The backend suite was verified locally on SQLite. PostgreSQL was also verified for the database-cascade regression coverage introduced in commit 4.
 
 The suite covers:
 - **Service Unit Tests (`tests/test_board_service.py`, `tests/test_task_service.py`)**:
@@ -203,25 +209,39 @@ The suite covers:
 - **Business Domain & Health API (`tests/test_health.py`)**:
   - Domain rules in `HealthService` without web server.
   - HTTP status codes and contract on `GET /health`.
+- **REST API Integration (`tests/test_api_integration.py`)**:
+  - Board listing, creation, retrieval, and deletion.
+  - Task listing, filtering, creation, status updates, and deletion.
+  - Uniform 400/404 error response payloads.
+  - Non-existent board/task handling at the HTTP layer.
 
 ---
 
 ## 7. API Contract (Current Endpoints)
 
-### Health Check
+The backend currently exposes:
 
-- **Method**: `GET`
-- **Path**: `/health` (or `/health/`)
-- **Description**: Proves backend service liveness and reachability.
-- **Request Body**: None
-- **Response (200 OK)**:
-  ```json
-  {
-    "status": "ok"
-  }
-  ```
+- `GET /health`
+- `GET /api/boards/`
+- `POST /api/boards/`
+- `GET /api/boards/{id}/`
+- `DELETE /api/boards/{id}/`
+- `GET /api/boards/{id}/tasks/?status=`
+- `POST /api/boards/{id}/tasks/`
+- `PATCH /api/tasks/{id}/`
+- `DELETE /api/tasks/{id}/`
 
-Only the health endpoint is currently exposed. Board/task REST endpoints, serializers, and the uniform JSON error contract are pending commit 4; service exceptions are not yet mapped to HTTP responses.
+All failures use a single JSON envelope:
+
+```json
+{
+  "error": "VALIDATION_FAILED",
+  "message": "Title cannot be empty or whitespace-only.",
+  "field": "title"
+}
+```
+
+The full request/response contract, examples, and cURL snippets are documented in [API.md](API.md).
 
 ---
 
@@ -234,6 +254,8 @@ Only the health endpoint is currently exposed. Board/task REST endpoints, serial
 - **Status**: Creation defaults to `TODO` when omitted. Explicit values and filters must exactly match `TODO`, `IN_PROGRESS`, or `DONE`; an empty filter is invalid. Any transition between valid statuses, including reapplying the current status, is allowed.
 - **Lookup Precedence**: Resource existence is checked before validating task fields/filters. IDs are expected to be integers, with URL parsing delegated to the future HTTP layer.
 - **Ordering**: Boards are listed newest first and tasks oldest first, following model ordering. Order within identical creation timestamps is unspecified.
-- **Scope**: Updates currently change only status. No authentication, pagination, bulk import, or concurrency control is added.
+- **Scope**: Updates currently change only status. Editing a task title/description, pagination, authentication, and bulk import are intentionally out of scope.
 - **Database Cascade Maintenance**: Django's `on_delete` does not generate SQL cascade rules. Migration `0002` supplies them explicitly; future table rebuilds/FK replacements must preserve the custom rule or trigger. See [SCHEMA.md](SCHEMA.md) for the implementation and rollback trade-offs.
-- **Remaining Work**: Board/task HTTP endpoints and error mapping (commit 4), frontend task management (commit 5), and final API documentation/submission self-checks (commit 6).
+- **Database Choice**: PostgreSQL is the preferred target for reviewer parity with the brief. SQLite remains the default local fallback so the project starts from a clean clone with no separate database setup.
+- **Known Limitation**: The database rejects empty strings, but whitespace-only protection is implemented in the service/controller layer rather than as a database `CHECK` using trimmed values.
+- **Frontend Testing**: Frontend automated tests are intentionally skipped because the brief marks them as optional. Time was prioritized toward backend business-rule and API coverage.

@@ -12,6 +12,9 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = ['id', 'board', 'title', 'description', 'status', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'board': {'required': False},
+        }
     
     def validate_title(self, value):
         """

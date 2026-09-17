@@ -120,13 +120,13 @@ class TaskViewSet(viewsets.ViewSet):
             
             title = serializer.validated_data.get('title')
             description = serializer.validated_data.get('description', '')
-            status = serializer.validated_data.get('status', 'TODO')
+            task_status = serializer.validated_data.get('status', 'TODO')
             
             task = self.task_service.create_task(
                 board_id=int(board_id),
                 title=title,
                 description=description,
-                status=status
+                status=task_status
             )
             
             response_serializer = TaskSerializer(task)
