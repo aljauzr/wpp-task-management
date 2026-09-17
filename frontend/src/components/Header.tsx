@@ -5,13 +5,11 @@ export const Header: React.FC = () => {
     <header className="header">
       <div className="header-container">
         <div className="brand">
-          <div className="brand-logo">TM</div>
+          <div className="brand-logo">MTM</div>
           <div>
-            <h1 className="brand-title">Task Manager</h1>
-            <p className="brand-subtitle">WPP Media Full Stack Take-Home Study Case</p>
+            <h1 className="brand-title">Mini Task Management</h1>
           </div>
         </div>
-        <div className="header-badge">Initial Scaffolding</div>
       </div>
     </header>
   );

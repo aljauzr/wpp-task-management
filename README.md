@@ -4,11 +4,9 @@ Study Case Submission for **Executive Full Stack Developer - WPP Media**.
 
 ## Current Progress
 
-Commit 3 adds `BoardService` and `TaskService`, repository-backed persistence, domain validation/errors, and isolated unit tests plus database integration tests. Run the complete backend suite from `backend/` with `python -m pytest -q`.
+Commit 5 turns the frontend into a working task management UI: board selection and creation, task creation, inline status updates, deletion, status filtering, and backend-down handling without a blank screen.
 
-Only `/health` is currently exposed over HTTP. Board/task REST endpoints and uniform error handling are next (commit 4), followed by the task-management UI (commit 5) and final documentation/self-checks (commit 6).
-
-**R4 follow-up completed:** Migration `0002` enforces cascade deletion through PostgreSQL's `ON DELETE CASCADE` FK or an equivalent SQLite database trigger. Direct-SQL and migration regression tests verify deletion, rollback, and preservation of existing data. Run `python manage.py migrate` to update existing databases. See [schema details](backend/SCHEMA.md).
+The backend now exposes the board/task REST API documented in [backend/API.md](backend/API.md), and the R4 follow-up is complete: migration `0002` enforces cascade deletion through PostgreSQL's `ON DELETE CASCADE` FK or an equivalent SQLite trigger. Run `python manage.py migrate` in `backend/` to update an existing local database.
 
 ---
 

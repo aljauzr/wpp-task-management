@@ -1,87 +1,58 @@
 import React from 'react';
 import Head from 'next/head';
 import { Layout } from '../components/Layout';
-import { HealthCard } from '../components/HealthCard';
-import { useHealthCheck } from '../hooks/useHealthCheck';
+import { BoardSidebar } from '../components/task-manager/BoardSidebar';
+import { TaskWorkspace } from '../components/task-manager/TaskWorkspace';
+import { useTaskManager } from '../hooks/useTaskManager';
 
 export default function Home() {
-  const health = useHealthCheck();
+  const taskManager = useTaskManager();
 
   return (
     <>
       <Head>
-        <title>Task Manager • Initial Scaffolding</title>
+        <title>Mini Task Management</title>
       </Head>
       <Layout>
-        <section className="intro-section">
-          <h2>Initialization Complete</h2>
-          <p className="intro-text">
-            Welcome to the mini task management application. Both the backend and frontend are
-            configured as independent decoupled services communicating over HTTP.
-          </p>
-        </section>
-
-        {/* Live Backend Connection Status */}
-        <section className="section">
-          <HealthCard health={health} />
-        </section>
-
-        {/* System Architecture Overview */}
-        <section className="section">
-          <h3 className="section-title">Service Architecture</h3>
-          <div className="grid grid-2">
-            <div className="card">
-              <h4 className="card-subtitle">Backend Service</h4>
-              <p className="card-desc">
-                Built with <strong>Python 3.12+</strong> and <strong>Django REST Framework</strong>.
-              </p>
-              <ul className="spec-list">
-                <li><span>Port:</span> <code>8000</code></li>
-                <li><span>Layers:</span> <code>Controllers → Services → Repositories → Models</code></li>
-                <li><span>Health Endpoint:</span> <code>GET /health</code></li>
-                <li><span>Database Tooling:</span> Django Migrations in <code>src/database/migrations</code></li>
-              </ul>
-            </div>
-
-            <div className="card">
-              <h4 className="card-subtitle">Frontend Service</h4>
-              <p className="card-desc">
-                Built with <strong>React 19</strong>, <strong>Next.js</strong>, and <strong>TypeScript</strong>.
-              </p>
-              <ul className="spec-list">
-                <li><span>Port:</span> <code>3000</code></li>
-                <li><span>API Base URL:</span> <code>{health.baseUrl}</code></li>
-                <li><span>Configuration:</span> Managed via <code>.env.local</code> (R26 compliant)</li>
-                <li><span>Fault Tolerance:</span> Resilient error boundary when backend is offline</li>
-              </ul>
-            </div>
+        <section className="intro-section page-intro">
+          <div>
+            <h2>Mini Task Management</h2>
+            <p className="intro-text">
+              Create boards, add tasks, filter by status, and update progress inline.
+            </p>
           </div>
         </section>
 
-        {/* Self-Check & Verification Status */}
         <section className="section">
-          <div className="card callout-card">
-            <h4 className="card-subtitle">Evaluation Self-Check Status</h4>
-            <div className="checklist">
-              <div className="check-item">
-                <span className="check-icon">✓</span>
-                <div>
-                  <strong>Independent Processes (Section 4):</strong> Backend and frontend start with their own commands and run independently.
-                </div>
-              </div>
-              <div className="check-item">
-                <span className="check-icon">✓</span>
-                <div>
-                  <strong>Configurable Base URL (R26):</strong> API client reads from <code>NEXT_PUBLIC_API_BASE_URL</code> without hardcoded endpoints.
-                </div>
-              </div>
-              <div className="check-item">
-                <span className="check-icon">✓</span>
-                <div>
-                  <strong>Layered Separation (R17):</strong> Business logic decoupled from HTTP presentation and database access.
-                </div>
-              </div>
-            </div>
+          <div className="task-manager-shell">
+            <BoardSidebar
+              boards={taskManager.boards}
+              selectedBoardId={taskManager.selectedBoardId}
+              isLoading={taskManager.isBoardsLoading}
+              isSubmitting={taskManager.isSubmittingBoard}
+              error={taskManager.boardError}
+              formError={taskManager.boardFormError}
+              onSelectBoard={(boardId) => void taskManager.selectBoard(boardId)}
+              onCreateBoard={taskManager.submitBoard}
+            />
+
+            <TaskWorkspace
+              selectedBoard={taskManager.selectedBoard}
+              tasks={taskManager.tasks}
+              taskFilter={taskManager.taskFilter}
+              isBoardsLoading={taskManager.isBoardsLoading}
+              isTasksLoading={taskManager.isTasksLoading}
+              isSubmittingTask={taskManager.isSubmittingTask}
+              boardError={taskManager.boardError}
+              taskError={taskManager.taskError}
+              taskFormError={taskManager.taskFormError}
+              onRetry={taskManager.retry}
+              onSetTaskFilter={taskManager.setTaskFilter}
+              onCreateTask={taskManager.submitTask}
+              onChangeTaskStatus={taskManager.changeTaskStatus}
+              onDeleteTask={taskManager.removeTask}
+              onDeleteBoard={taskManager.removeBoard}
+            />
           </div>
         </section>
       </Layout>

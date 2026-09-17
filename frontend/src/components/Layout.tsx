@@ -16,7 +16,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </main>
       <footer className="footer">
         <div className="footer-container">
-          <p>WPP Media Full Stack Study Case • Clean Architecture Scaffolding</p>
+          <p>WPP Media Executive Fullstack Developer Study Case</p>
         </div>
       </footer>
     </div>
