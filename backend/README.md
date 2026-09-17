@@ -7,7 +7,7 @@ Independent REST API service for the Mini Task Management Application, built wit
 ## 1. Stack Choice & Rationale (Section 5)
 
 > **Why Python with Django REST Framework:**
-> We chose Python with Django REST Framework because of its mature ORM, robust migration engine, declarative validation serializer pipeline, and clean architectural extensibility. Django provides first-class relational integrity enforcement at the database level (foreign keys, cascading policies, and check constraints) while DRF facilitates a clean separation between HTTP representation and underlying business domain services.
+> We chose Python with Django REST Framework because of its mature ORM, migration engine, and support for a clear separation between HTTP handling and business services. Foreign keys and check constraints enforce data integrity in the database; Django's `on_delete` policy handles cascading through the ORM (see the R4 limitation below).
 
 ---
 
@@ -36,6 +36,21 @@ backend/
 2. **Services (`src/services/`)**: Implement business rules, validation, and domain flows without dependencies on Django HTTP requests or responses.
 3. **Repositories (`src/repositories/`)**: Encapsulate ORM queries and data persistence operations.
 4. **Models (`src/models/`)**: Define database tables, data types, constraints, and relationships.
+
+### Service Layer (Commit 3)
+
+| Service | Operations |
+|---|---|
+| `BoardService` | `list_boards()`, `get_board(board_id)`, `create_board(name)`, `delete_board(board_id)` |
+| `TaskService` | `get_task(task_id)`, `list_tasks(board_id, status=None)`, `create_task(board_id, title, description="", status="TODO")`, `update_status(task_id, status)`, `delete_task(task_id)` |
+
+Services accept injected repositories for isolated unit tests and use Django-backed repositories by default. They return model instances/lists, or `None` for deletion. Models are also used as data objects in unit tests; ORM queries and writes stay in repositories. This keeps the implementation small without adding a second set of domain entities.
+
+Expected failures use plain Python exceptions in `src/services/exceptions.py`:
+- `ValidationError`: `code="VALIDATION_FAILED"`, a useful `message`, and the invalid `field`.
+- `NotFoundError`: `code="NOT_FOUND"`, a `message`, `resource`, and `entity_id`; `field` is `None`.
+
+Neither exception contains an HTTP status or response object. Mapping them to consistent JSON responses belongs to commit 4. Unexpected persistence errors are not disguised as validation failures.
 
 ---
 
@@ -110,11 +125,11 @@ The full relational schema, column definitions, constraints, and trade-off ratio
 
 ### Summary of Tables:
 - **`boards`** (R1): `id` (PK, BigInt), `name` (VARCHAR(255), non-empty check constraint), `created_at`, `updated_at`.
-- **`tasks`** (R2, R3, R4): `id` (PK, BigInt), `board_id` (FK referencing `boards.id` with `ON DELETE CASCADE`), `title` (VARCHAR(255), non-empty check constraint), `description` (TEXT), `status` (VARCHAR(20), choices: `TODO`, `IN_PROGRESS`, `DONE`, default: `TODO`, check constraint), `created_at`, `updated_at`.
+- **`tasks`** (R2, R3): `id` (PK, BigInt), `board_id` (FK referencing `boards.id`), `title` (VARCHAR(255), non-empty check constraint), `description` (TEXT), `status` (VARCHAR(20), choices: `TODO`, `IN_PROGRESS`, `DONE`, ORM default: `TODO`, check constraint), `created_at`, `updated_at`.
 
 ### Enforced Constraints & Indexes:
 - **Foreign Key Constraint (R3)**: Enforced at the database engine level (`db_constraint=True`).
-- **Cascade Deletion (R4)**: Deleting a board cascades to delete its tasks (`ON DELETE CASCADE`), ensuring no orphaned tasks.
+- **Deletion Policy (R4, incomplete)**: The chosen behavior is cascade deletion. The service delegates to Django's ORM, which deletes the board's tasks. However, migration `0001` does **not** generate database-level `ON DELETE CASCADE`; direct SQL deletion of a populated board is rejected by the foreign key. A follow-up migration and direct-SQL regression test are required before R4 can be claimed complete.
 - **Composite Indexes (R5)**:
   - `idx_tasks_board_status` (`board_id`, `status`) to optimize `GET /api/boards/{id}/tasks?status=...`.
   - `idx_tasks_board_created` (`board_id`, `created_at`) to optimize chronological task queries within a board.
@@ -128,27 +143,49 @@ The full relational schema, column definitions, constraints, and trade-off ratio
 
 ## 6. Running the Tests (R27, R28, R30)
 
-Tests run using Django's built-in test runner or `pytest`.
+Run these commands from `backend/`, with the virtual environment activated and dependencies installed.
 
 ### Execute Test Suite:
 
 ```bash
-python manage.py test
+python -m pytest -q
 ```
 
-Or with `pytest`:
+This is the canonical command for the **complete** suite, including the pytest-based service tests and the existing Django/unittest tests. `python manage.py test` only discovers the older unittest-style tests, so it is not a substitute for the full suite.
+
+Run only isolated service unit tests (no database access):
 
 ```bash
-pytest
+python -m pytest tests/test_board_service.py tests/test_task_service.py -q
 ```
 
-The test suite currently validates 11 tests across:
+Run only service/repository integration tests:
+
+```bash
+python -m pytest tests/test_service_integration.py -q
+```
+
+No running backend or frontend server is needed. Pytest-django blocks database access in the service unit tests; their repositories are autospecced mocks. Integration tests use a separate, temporary test database, not the application's data. With `DATABASE_URL` empty they use SQLite; when it targets PostgreSQL, the database server must be running and the user needs permission to create a test database.
+
+The suite covers:
+- **Service Unit Tests (`tests/test_board_service.py`, `tests/test_task_service.py`)**:
+  - Creating boards/tasks, trimming names/titles, defaults, and maximum-length boundaries.
+  - Missing, empty, whitespace-only, wrong-type, and overlength required fields.
+  - Description validation and invalid statuses during creation, filtering, and updates.
+  - Missing boards/tasks, including update/delete failures, without writes on rejected input.
+  - Board/status filter delegation and valid status changes.
+- **Service/Repository Integration (`tests/test_service_integration.py`)**:
+  - Persisted values, timestamps, and list ordering.
+  - Actual status filtering without leaking tasks from another board.
+  - Empty boards and filters with no matching tasks.
+  - Task deletion and ORM board cascade, preserving unrelated data.
+  - Missing-resource errors using real repositories.
 - **Database Models & Constraints (`tests/test_models.py`)**:
   - Creation of boards and tasks with defaults.
   - Rejection of empty board names (`CHECK (name != '')`).
   - Rejection of empty task titles (`CHECK (title != '')`).
   - Rejection of invalid task statuses (`CHECK (status IN (...))`).
-  - Cascade deletion of tasks when a parent board is deleted (`ON DELETE CASCADE`).
+  - Cascade deletion through the Django ORM (not proof of database-level cascade).
   - Enforcement of foreign key relationships at the database level.
 - **Business Domain & Health API (`tests/test_health.py`)**:
   - Domain rules in `HealthService` without web server.
@@ -170,13 +207,8 @@ The test suite currently validates 11 tests across:
     "status": "ok"
   }
   ```
-- **Error Response (500 Internal Server Error)**:
-  ```json
-  {
-    "error": "INTERNAL_SERVER_ERROR",
-    "message": "An unexpected error occurred"
-  }
-  ```
+
+Only the health endpoint is currently exposed. Board/task REST endpoints, serializers, and the uniform JSON error contract are pending commit 4; service exceptions are not yet mapped to HTTP responses.
 
 ---
 
@@ -184,4 +216,10 @@ The test suite currently validates 11 tests across:
 
 - **Database Engine Dual-Mode**: PostgreSQL is configured as the primary production engine. However, we configured automatic fallback to SQLite when `DATABASE_URL` is not specified so reviewers can verify the codebase immediately without launching a PostgreSQL instance.
 - **Migration Location**: Django migrations are configured to output into `src/database/migrations/` via `MIGRATION_MODULES` to adhere cleanly to the requested folder layout.
-
+- **Required Text**: Board names and task titles are trimmed before checking that they contain 1-255 characters. Missing, `None`, and non-string values are rejected. Duplicate board names and task titles are allowed.
+- **Description**: Omission means an empty string. Explicit `None` or non-string values are rejected; valid text is preserved, including whitespace and line breaks.
+- **Status**: Creation defaults to `TODO` when omitted. Explicit values and filters must exactly match `TODO`, `IN_PROGRESS`, or `DONE`; an empty filter is invalid. Any transition between valid statuses, including reapplying the current status, is allowed.
+- **Lookup Precedence**: Resource existence is checked before validating task fields/filters. IDs are expected to be integers, with URL parsing delegated to the future HTTP layer.
+- **Ordering**: Boards are listed newest first and tasks oldest first, following model ordering. Order within identical creation timestamps is unspecified.
+- **Scope**: Updates currently change only status. No authentication, pagination, bulk import, or concurrency control is added.
+- **Remaining Work**: Database-level cascade enforcement (R4), board/task HTTP endpoints and error mapping (commit 4), frontend task management (commit 5), and final API documentation/submission self-checks (commit 6). PostgreSQL behavior has not been verified in this increment; local tests were run on SQLite.

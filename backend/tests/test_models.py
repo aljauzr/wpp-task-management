@@ -53,8 +53,8 @@ class TaskModelTest(TestCase):
 
     def test_cascade_delete_board_removes_tasks(self):
         """
-        R4 requirement: Enforce delete behavior at schema level.
-        Deleting a board automatically removes all associated tasks via ON DELETE CASCADE.
+        Deleting through Django removes associated tasks via the ORM collector.
+        This does not verify database-level ON DELETE CASCADE (R4 is still pending).
         """
         task1 = Task.objects.create(board=self.board, title="Task 1")
         task2 = Task.objects.create(board=self.board, title="Task 2")

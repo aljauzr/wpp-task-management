@@ -2,6 +2,14 @@
 
 Study Case Submission for **Executive Full Stack Developer - WPP Media**.
 
+## Current Progress
+
+Commit 3 adds `BoardService` and `TaskService`, repository-backed persistence, domain validation/errors, and isolated unit tests plus database integration tests. Run the complete backend suite from `backend/` with `python -m pytest -q`.
+
+Only `/health` is currently exposed over HTTP. Board/task REST endpoints and uniform error handling are next (commit 4), followed by the task-management UI (commit 5) and final documentation/self-checks (commit 6).
+
+**Known carry-over from commit 2:** Board deletion currently cascades through Django's ORM, not a database `ON DELETE CASCADE`. R4 needs a follow-up migration and direct-SQL verification before submission. See [schema details](backend/SCHEMA.md).
+
 ---
 
 ## 1. Project Overview & Architecture
@@ -124,5 +132,5 @@ As specified in the assessment guidelines, the two services must pass the two-mi
 ## 5. Detailed Documentation
 
 For service-specific design decisions, API contracts, schema documentation, and testing guides:
-- [Backend Documentation](file:///d:/GitHub%20Repositories/wpp-task-management/backend/README.md)
-- [Frontend Documentation](file:///d:/GitHub%20Repositories/wpp-task-management/frontend/README.md)
+- [Backend Documentation](backend/README.md)
+- [Frontend Documentation](frontend/README.md)
